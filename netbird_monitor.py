@@ -25,7 +25,9 @@ import sys
 import time
 import urllib.error
 import urllib.request
+import re
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 API_URL = os.environ.get("NETBIRD_API_URL", "https://api.netbird.io").rstrip("/")
 TOKEN = os.environ.get("NETBIRD_TOKEN", "")
@@ -33,6 +35,7 @@ WEBHOOK = os.environ.get("DISCORD_WEBHOOK_URL", "")
 WATCH = {p.strip() for p in os.environ.get("WATCH_PEERS", "").split(",") if p.strip()}
 INTERVAL = int(os.environ.get("POLL_INTERVAL", "30"))
 STATE_FILE = os.environ.get("STATE_FILE", "netbird_state.json")
+TIMEZONE = os.environ.get("TIMEZONE", "Europe/Zurich")
 
 # Nombre de vérifications consécutives identiques avant d'alerter
 # (évite les faux positifs sur une coupure très brève). 1 = alerte immédiate.
@@ -96,6 +99,21 @@ def save_state(state):
     os.replace(tmp, STATE_FILE)
 
 
+def format_time(value):
+    """Convertit un horodatage ISO (UTC) de NetBird vers le fuseau local."""
+    if not value:
+        return "?"
+    try:
+        # On retire les fractions de seconde (NetBird renvoie des nanosecondes).
+        cleaned = re.sub(r"\.\d+", "", str(value)).replace("Z", "+00:00")
+        dt = datetime.fromisoformat(cleaned)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(ZoneInfo(TIMEZONE)).strftime("%d/%m/%Y %H:%M:%S")
+    except Exception:
+        return str(value)
+
+
 def check_once(state):
     peers = fetch_peers()
     for p in peers:
@@ -106,7 +124,7 @@ def check_once(state):
         pid = p["id"]
         connected = bool(p.get("connected"))
         ip = p.get("ip", "?")
-        last_seen = p.get("last_seen", "?")
+        last_seen = format_time(p.get("last_seen"))
 
         entry = state.get(pid)
 
