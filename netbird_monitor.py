@@ -110,10 +110,19 @@ def check_once(state):
 
         entry = state.get(pid)
 
-        # Première fois qu'on voit ce peer : on enregistre sans alerter.
+        # Première fois qu'on voit ce peer : on enregistre l'état initial
+        # et on envoie un message d'information (une seule fois).
         if entry is None:
             state[pid] = {"confirmed": connected, "pending": connected, "count": 0}
             print(f"[init] {name} : {'connecté' if connected else 'déconnecté'}")
+            if connected:
+                send_discord(f"🔵 **{name}** : état initial **connecté** (`{ip}`)", 0x3498DB)
+            else:
+                send_discord(
+                    f"⚪ **{name}** : état initial **déconnecté** (`{ip}`)\n"
+                    f"Dernière activité : `{last_seen}`",
+                    0x95A5A6,
+                )
             continue
 
         if connected == entry["confirmed"]:
